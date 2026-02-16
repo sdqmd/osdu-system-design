@@ -28,6 +28,7 @@ Architecture documentation for a self-hosted OSDU Platform deployment on a singl
 | [Architecture Overview](docs/architecture-overview.md) | High-level system architecture |
 | [Network Security](docs/network-security.md) | VPN, firewall, and network isolation |
 | [Ingress Design](docs/ingress-design.md) | Nginx configuration (public/private split) |
+| [Authentication](docs/authentication.md) | Keycloak IdP, JWT validation, OSDU entitlements |
 | [Service Inventory](docs/service-inventory.md) | Services and exposure strategy |
 | [Decisions](docs/decisions.md) | Architecture Decision Records (ADRs) |
 
@@ -72,6 +73,8 @@ Architecture documentation for a self-hosted OSDU Platform deployment on a singl
 5. **ADR-005**: Cloudflare DNS
 6. **ADR-006**: WireGuard VPN for private access
 7. **ADR-007**: Explicit IP binding in Nginx
+8. **ADR-010**: Keycloak as Identity Provider
+9. **ADR-011**: Split auth exposure (public login, private admin)
 
 ## Quick Links
 
@@ -88,12 +91,14 @@ Architecture documentation for a self-hosted OSDU Platform deployment on a singl
 - [x] Ingress pattern (Nginx + Istio)
 - [x] Network isolation (VPN design)
 - [x] Service inventory
-- [x] ADRs (7 accepted)
+- [x] Authentication design (Keycloak)
+- [x] ADRs (9 accepted, 4 pending)
 
 ### Pending
 - [ ] Domain purchase and DNS setup
 - [ ] WireGuard implementation
+- [ ] Keycloak deployment
 - [ ] Nginx configuration deployment
-- [ ] OSDU authentication design
 - [ ] Backup strategy
 - [ ] CI/CD pipeline
+- [ ] Resource limits

@@ -377,22 +377,104 @@ Use the standard Prometheus/Grafana/ELK stack with Jaeger for tracing and Kiali 
 
 ---
 
+## ADR-010: Identity Provider Selection
+
+**Status:** Accepted  
+**Date:** 2026-02-17
+
+### Context
+
+OSDU requires an OAuth2/OIDC compliant identity provider for user authentication and authorization.
+
+### Options Considered
+
+1. **Keycloak** ✅
+   - Full OIDC implementation
+   - Well-documented for OSDU
+   - Admin UI included
+   - ✅ Self-hosted, full control
+   - ❌ Heavy (~1GB RAM)
+
+2. **Authentik**
+   - Modern, Python-based
+   - ❌ Less OSDU documentation
+
+3. **Dex**
+   - Lightweight, K8s-native
+   - ❌ No admin UI
+   - ❌ Limited features
+
+4. **Auth0 / Azure AD**
+   - Zero maintenance
+   - ❌ Cost
+   - ❌ External dependency
+
+### Decision
+
+Use **Keycloak** as the identity provider. It's the most proven option for self-hosted OSDU deployments with extensive documentation.
+
+### Consequences
+
+- **Positive:** Full-featured IdP with admin console
+- **Positive:** Well-documented OSDU integration
+- **Positive:** Supports federation (Google, GitHub) later
+- **Negative:** Additional ~1.5GB RAM overhead (Keycloak + DB)
+
+---
+
+## ADR-011: Auth Endpoint Exposure
+
+**Status:** Accepted  
+**Date:** 2026-02-17
+
+### Context
+
+Users need to authenticate to access OSDU APIs. The Keycloak login/token endpoints must be accessible, but the admin console should be protected.
+
+### Options Considered
+
+1. **Fully public Keycloak**
+   - ❌ Admin console exposed to attacks
+
+2. **Fully private (VPN only)**
+   - ❌ Users can't login without VPN
+
+3. **Split exposure** ✅
+   - Public: Login and token endpoints only
+   - Private (VPN): Admin console
+   - ✅ Secure and usable
+
+### Decision
+
+Expose Keycloak with split access:
+- `auth.domain.com` (public): `/realms/osdu/protocol/openid-connect/*` only
+- `keycloak.domain.com` (VPN): Full admin access
+
+### Consequences
+
+- **Positive:** Users can authenticate from anywhere
+- **Positive:** Admin console protected from internet attacks
+- **Negative:** More complex Nginx configuration
+
+---
+
 ## Pending Decisions
 
-### ADR-010: Authentication for OSDU APIs
-- OAuth2/OIDC provider
-- Options: Keycloak, Auth0, Azure AD mock
-
-### ADR-011: Backup Strategy
+### ADR-012: Backup Strategy
 - PostgreSQL backups
 - Elasticsearch snapshots
 - MinIO bucket replication
 
-### ADR-012: CI/CD Pipeline
+### ADR-013: CI/CD Pipeline
 - ArgoCD for GitOps?
 - How to update OSDU services?
 
-### ADR-013: Resource Limits and Quotas
+### ADR-014: Resource Limits and Quotas
 - Per-service limits
 - Namespace quotas
 - Priority classes
+
+### ADR-015: Secret Management
+- Kubernetes secrets vs HashiCorp Vault?
+- How to manage Keycloak client secrets?
+- Rotation strategy?

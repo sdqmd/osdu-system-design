@@ -45,11 +45,12 @@ This document catalogs all services in the OSDU deployment, their exposure strat
 
 ## Public Services
 
-Services accessible from the internet (OSDU API only).
+Services accessible from the internet.
 
 | Subdomain | Service | Auth | Notes |
 |-----------|---------|------|-------|
-| `osdu.domain.com` | Istio Ingress | OSDU OAuth2/OIDC | Only public endpoint |
+| `osdu.domain.com` | Istio Ingress | OSDU OAuth2/OIDC | OSDU APIs |
+| `auth.domain.com` | Keycloak (limited) | N/A | Login/token endpoints only |
 
 ### OSDU Core Services (via Istio)
 
@@ -78,6 +79,7 @@ Admin UIs and monitoring tools accessible only via WireGuard VPN.
 
 | Subdomain | Service | NodePort | Auth | Purpose |
 |-----------|---------|----------|------|---------|
+| `keycloak.domain.com` | Keycloak Admin | 30800 | Built-in | Identity Provider Admin |
 | `minio.domain.com` | MinIO API | 30900 | S3 credentials | Object Storage API |
 | `console.domain.com` | MinIO Console | 30901 | MinIO login | Object Storage UI |
 | `kibana.domain.com` | Kibana | 30561 | Built-in | Log analysis |
@@ -90,6 +92,8 @@ Admin UIs and monitoring tools accessible only via WireGuard VPN.
 
 | Service | Memory | CPU | Storage |
 |---------|--------|-----|---------|
+| Keycloak | 512Mi-1Gi | 0.5-1 | - |
+| Keycloak PostgreSQL | 256Mi-512Mi | 0.25 | 5Gi |
 | MinIO | 1-2Gi | 1 | 200Gi+ |
 | Kibana | 512Mi-1Gi | 0.5 | - |
 | Grafana | 256Mi-512Mi | 0.25 | - |
