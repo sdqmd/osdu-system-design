@@ -461,9 +461,15 @@ Expose Keycloak with split access:
 ## Pending Decisions
 
 ### ADR-012: Backup Strategy
-- PostgreSQL backups
-- Elasticsearch snapshots
-- MinIO bucket replication
+**Status:** Draft — See [backup-strategy.md](backup-strategy.md)
+
+Open questions:
+- RPO/RTO targets for learning environment
+- Offsite storage provider (Hetzner Storage Box vs Backblaze B2)
+- Backup tools selection (pg_dump vs pgBackRest, restic vs rclone)
+- Retention policies
+- Encryption and key management
+- Monitoring and alerting requirements
 
 ### ADR-013: CI/CD Pipeline
 - ArgoCD for GitOps?

@@ -29,6 +29,7 @@ Architecture documentation for a self-hosted OSDU Platform deployment on a singl
 | [Network Security](docs/network-security.md) | VPN, firewall, and network isolation |
 | [Ingress Design](docs/ingress-design.md) | Nginx configuration (public/private split) |
 | [Authentication](docs/authentication.md) | Keycloak IdP, JWT validation, OSDU entitlements |
+| [Backup Strategy](docs/backup-strategy.md) | Backup considerations and options (draft) |
 | [Service Inventory](docs/service-inventory.md) | Services and exposure strategy |
 | [Decisions](docs/decisions.md) | Architecture Decision Records (ADRs) |
 
