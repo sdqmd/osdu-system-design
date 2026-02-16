@@ -4,38 +4,54 @@
 
 This document catalogs all services in the OSDU deployment, their exposure strategy, and resource requirements.
 
-## Service Categories
+## Service Exposure Model
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        Service Layers                           │
-├─────────────────────────────────────────────────────────────────┤
-│  External Access (via Nginx subdomains)                         │
-│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐   │
-│  │  OSDU   │ │  MinIO  │ │ Kibana  │ │ Grafana │ │ ArgoCD  │   │
-│  │   API   │ │ Console │ │         │ │         │ │         │   │
-│  └─────────┘ └─────────┘ └─────────┘ └─────────┘ └─────────┘   │
-├─────────────────────────────────────────────────────────────────┤
-│  OSDU Core Services (via Istio mesh)                            │
-│  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐        │
-│  │Storage │ │ Search │ │ Legal  │ │Indexer │ │  CRS   │  ...   │
-│  └────────┘ └────────┘ └────────┘ └────────┘ └────────┘        │
-├─────────────────────────────────────────────────────────────────┤
-│  Data Layer (internal only)                                     │
-│  ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐   │
-│  │ PostgreSQL │ │Elasticsearch│ │   Redis    │ │   MinIO    │   │
-│  └────────────┘ └────────────┘ └────────────┘ └────────────┘   │
-├─────────────────────────────────────────────────────────────────┤
-│  Platform Services (internal only)                              │
-│  ┌────────────┐ ┌────────────┐ ┌────────────┐                  │
-│  │   Istio    │ │ Prometheus │ │   Kafka    │                  │
-│  └────────────┘ └────────────┘ └────────────┘                  │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                        Exposure Zones                               │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  PUBLIC (Internet via 135.181.137.138)                              │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │  osdu.domain.com → OSDU APIs (via Istio)                    │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+│                                                                     │
+│  PRIVATE (VPN via 10.10.0.1)                                        │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │  Admin & Monitoring UIs                                     │    │
+│  │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐           │    │
+│  │  │  MinIO  │ │ Kibana  │ │ Grafana │ │ ArgoCD  │           │    │
+│  │  │ Console │ │         │ │         │ │         │           │    │
+│  │  └─────────┘ └─────────┘ └─────────┘ └─────────┘           │    │
+│  │  ┌─────────┐ ┌─────────┐                                   │    │
+│  │  │  Kiali  │ │ Jaeger  │                                   │    │
+│  │  └─────────┘ └─────────┘                                   │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+│                                                                     │
+│  INTERNAL (Cluster only - no external access)                       │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │  Data Layer                                                 │    │
+│  │  ┌──────────┐ ┌─────────────┐ ┌───────┐ ┌───────┐          │    │
+│  │  │PostgreSQL│ │Elasticsearch│ │ Redis │ │ Kafka │          │    │
+│  │  └──────────┘ └─────────────┘ └───────┘ └───────┘          │    │
+│  │                                                             │    │
+│  │  Platform Services                                          │    │
+│  │  ┌────────┐ ┌────────────┐ ┌───────────┐                   │    │
+│  │  │ Istio  │ │ Prometheus │ │Zookeeper  │                   │    │
+│  │  └────────┘ └────────────┘ └───────────┘                   │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-## OSDU Core Services
+## Public Services
 
-Services managed by Istio, accessed via OSDU API gateway.
+Services accessible from the internet (OSDU API only).
+
+| Subdomain | Service | Auth | Notes |
+|-----------|---------|------|-------|
+| `osdu.domain.com` | Istio Ingress | OSDU OAuth2/OIDC | Only public endpoint |
+
+### OSDU Core Services (via Istio)
 
 | Service | Purpose | Endpoint Path | Memory | CPU |
 |---------|---------|---------------|--------|-----|
@@ -56,69 +72,83 @@ Services managed by Istio, accessed via OSDU API gateway.
 
 **Total OSDU Services Estimate:** ~6-10GB RAM, 4-6 CPU cores
 
-## Data Layer Services
+## Private Services (VPN-Only)
 
-Backend services, internal only (ClusterIP).
+Admin UIs and monitoring tools accessible only via WireGuard VPN.
 
-| Service | Purpose | Exposure | Memory | CPU | Storage |
-|---------|---------|----------|--------|-----|---------|
-| PostgreSQL | OSDU metadata | Internal | 2-4Gi | 1 | 50Gi |
-| Elasticsearch | Search index | Internal | 4-8Gi | 2 | 100Gi |
-| Redis | Caching | Internal | 1-2Gi | 0.5 | - |
-| MinIO | Object storage | Internal + Console | 1-2Gi | 1 | 200Gi+ |
-| Kafka | Event streaming | Internal | 2-4Gi | 1 | 20Gi |
-| Zookeeper | Kafka coordination | Internal | 512Mi | 0.5 | 5Gi |
+| Subdomain | Service | NodePort | Auth | Purpose |
+|-----------|---------|----------|------|---------|
+| `minio.domain.com` | MinIO API | 30900 | S3 credentials | Object Storage API |
+| `console.domain.com` | MinIO Console | 30901 | MinIO login | Object Storage UI |
+| `kibana.domain.com` | Kibana | 30561 | Built-in | Log analysis |
+| `grafana.domain.com` | Grafana | 30300 | Built-in | Metrics dashboards |
+| `argocd.domain.com` | ArgoCD | 30443 | Built-in | GitOps CD |
+| `kiali.domain.com` | Kiali | 30686 | Token/Basic | Istio visualization |
+| `jaeger.domain.com` | Jaeger | 30686 | None/Basic | Distributed tracing |
 
-**Total Data Layer Estimate:** ~12-20GB RAM, 6-8 CPU cores
+### Resource Estimates (Private Services)
 
-## Observability Stack
+| Service | Memory | CPU | Storage |
+|---------|--------|-----|---------|
+| MinIO | 1-2Gi | 1 | 200Gi+ |
+| Kibana | 512Mi-1Gi | 0.5 | - |
+| Grafana | 256Mi-512Mi | 0.25 | - |
+| ArgoCD | 512Mi-1Gi | 0.5 | - |
+| Kiali | 256Mi-512Mi | 0.25 | - |
+| Jaeger | 512Mi-1Gi | 0.5 | - |
 
-| Service | Purpose | Exposure | Memory | CPU |
-|---------|---------|----------|--------|-----|
-| Prometheus | Metrics collection | Internal | 2-4Gi | 1 |
-| Grafana | Metrics visualization | Subdomain | 256Mi-512Mi | 0.25 |
-| Elasticsearch | Log storage | Internal | (shared above) | - |
-| Kibana | Log visualization | Subdomain | 512Mi-1Gi | 0.5 |
-| Jaeger | Distributed tracing | Internal/Subdomain | 512Mi-1Gi | 0.5 |
-| Kiali | Istio visualization | Internal/Subdomain | 256Mi-512Mi | 0.25 |
+## Internal Services (Cluster Only)
 
-## Platform Services
+Services with no external access, only reachable within Kubernetes.
 
-| Service | Purpose | Exposure | Memory | CPU |
-|---------|---------|----------|--------|-----|
-| Istio (Pilot) | Service mesh control | Internal | 1-2Gi | 1 |
-| Istio (Ingress) | Mesh ingress | NodePort | 256Mi-512Mi | 0.5 |
-| ArgoCD | GitOps CD | Subdomain | 512Mi-1Gi | 0.5 |
-| Cert-Manager | Certificate mgmt | Internal | 256Mi | 0.25 |
+### Data Layer
 
-## Exposure Strategy
+| Service | Purpose | Memory | CPU | Storage |
+|---------|---------|--------|-----|---------|
+| PostgreSQL | OSDU metadata | 2-4Gi | 1 | 50Gi |
+| Elasticsearch | Search index + logs | 4-8Gi | 2 | 100Gi |
+| Redis | Caching | 1-2Gi | 0.5 | - |
+| Kafka | Event streaming | 2-4Gi | 1 | 20Gi |
+| Zookeeper | Kafka coordination | 512Mi | 0.5 | 5Gi |
 
-### External (Subdomain)
+### Platform Services
 
-Services accessible from the internet via Nginx reverse proxy.
+| Service | Purpose | Memory | CPU |
+|---------|---------|--------|-----|
+| Istio (Pilot) | Service mesh control | 1-2Gi | 1 |
+| Prometheus | Metrics collection | 2-4Gi | 1 |
+| Cert-Manager | Certificate mgmt | 256Mi | 0.25 |
 
-| Subdomain | Service | Auth Required | Notes |
-|-----------|---------|---------------|-------|
-| `osdu.*` | Istio Ingress | Yes (OSDU auth) | Main API endpoint |
-| `minio.*` | MinIO API | Yes (S3 auth) | S3-compatible API |
-| `console.*` | MinIO Console | Yes | Web UI for MinIO |
-| `kibana.*` | Kibana | Yes (basic auth) | Log analysis |
-| `grafana.*` | Grafana | Yes (built-in) | Metrics dashboards |
-| `argocd.*` | ArgoCD | Yes (built-in) | GitOps UI |
-| `kiali.*` | Kiali | Yes (basic auth) | Istio visualization |
-| `jaeger.*` | Jaeger | Yes (basic auth) | Tracing UI |
+## Access Matrix
 
-### Internal Only (ClusterIP)
+| Role | Public (osdu.*) | VPN (admin UIs) | Cluster Internal |
+|------|:---------------:|:---------------:|:----------------:|
+| External API Client | ✅ | ❌ | ❌ |
+| Developer (VPN) | ✅ | ✅ | ❌ |
+| Admin (VPN) | ✅ | ✅ | ❌ |
+| Kubernetes Pods | ✅ | ✅ | ✅ |
 
-Services only accessible within the Kubernetes cluster.
+## Port Allocation Summary
 
-- PostgreSQL
-- Elasticsearch (API)
-- Redis
-- Kafka
-- Zookeeper
-- Prometheus
-- Istio control plane
+### Firewall Ports (External)
+
+| Port | Protocol | Purpose |
+|------|----------|---------|
+| 22 | TCP | SSH (consider restricting to VPN) |
+| 80 | TCP | HTTP → HTTPS redirect |
+| 443 | TCP | HTTPS (OSDU API) |
+| 51820 | UDP | WireGuard VPN |
+
+### NodePort Allocation (Internal)
+
+| Range | Service Type |
+|-------|--------------|
+| 30080-30099 | Istio Ingress |
+| 30300-30399 | Monitoring (Grafana, Prometheus) |
+| 30400-30499 | GitOps (ArgoCD) |
+| 30500-30599 | Logging (Kibana) |
+| 30600-30699 | Tracing (Jaeger, Kiali) |
+| 30900-30999 | Storage (MinIO) |
 
 ## Resource Summary
 
@@ -127,31 +157,55 @@ Services only accessible within the Kubernetes cluster.
 | Category | Memory | CPU | Storage |
 |----------|--------|-----|---------|
 | OSDU Services | 8-12Gi | 4-6 | - |
-| Data Layer | 12-20Gi | 6-8 | 400Gi |
+| Data Layer | 10-18Gi | 5-7 | 375Gi |
 | Observability | 4-8Gi | 2-3 | 50Gi |
 | Platform | 2-4Gi | 2-3 | - |
-| **Total** | **26-44Gi** | **14-20** | **450Gi** |
+| Admin UIs | 2-4Gi | 2-3 | - |
+| **Total** | **26-46Gi** | **15-22** | **425Gi** |
 
-### Server Capacity
+### Server Capacity Check
 
 | Resource | Available | Estimated Use | Headroom |
 |----------|-----------|---------------|----------|
-| Memory | 64GB | 30-44GB | 20-34GB |
-| CPU | 12 threads | 14-20 cores | ⚠️ Overcommit OK |
-| Storage | 700GB (/data) | 450GB | 250GB |
+| Memory | 64GB | 30-46GB | 18-34GB ✅ |
+| CPU | 12 threads | 15-22 cores | ⚠️ Overcommit |
+| Storage | 700GB (/data) | 425GB | 275GB ✅ |
 
-**Note:** CPU overcommit is acceptable for dev/learning environments. In production, you'd want dedicated cores.
+**Note:** CPU overcommit is acceptable for dev/learning. Production would need dedicated resources.
 
 ## Namespace Organization
 
 ```
-osdu-system/
+Kubernetes Namespaces:
 ├── osdu-core/          # OSDU microservices
 ├── osdu-data/          # PostgreSQL, Elasticsearch, Redis, Kafka
 ├── osdu-storage/       # MinIO
 ├── istio-system/       # Istio control plane
 ├── monitoring/         # Prometheus, Grafana
 ├── logging/            # Elasticsearch (logs), Kibana
+├── tracing/            # Jaeger
 ├── argocd/             # ArgoCD
 └── cert-manager/       # Cert-Manager
+```
+
+## Network Policies (Future)
+
+Consider implementing Kubernetes Network Policies to further restrict pod-to-pod communication:
+
+```yaml
+# Example: Only allow OSDU services to reach Elasticsearch
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: elasticsearch-access
+  namespace: osdu-data
+spec:
+  podSelector:
+    matchLabels:
+      app: elasticsearch
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: osdu-core
 ```

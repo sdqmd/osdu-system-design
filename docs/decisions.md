@@ -77,7 +77,7 @@ Need to secure all services with HTTPS. Multiple subdomains will be used.
 
 ### Decision
 
-Use Let's Encrypt wildcard certificate (`*.osdu.domain.com`) with Cloudflare DNS challenge.
+Use Let's Encrypt wildcard certificate (`*.domain.com`) with Cloudflare DNS challenge.
 
 ### Consequences
 
@@ -163,7 +163,7 @@ Use NodePort services for all externally-exposed services. Nginx proxies to `127
 
 ## ADR-005: DNS Provider
 
-**Status:** Proposed  
+**Status:** Accepted  
 **Date:** 2026-02-17
 
 ### Context
@@ -202,7 +202,152 @@ Use Cloudflare DNS (free tier) with proxy disabled (DNS only mode).
 
 ---
 
-## ADR-006: Observability Stack
+## ADR-006: Network Isolation with VPN
+
+**Status:** Accepted  
+**Date:** 2026-02-17
+
+### Context
+
+Admin interfaces (Kibana, Grafana, MinIO Console, ArgoCD) should not be exposed to the public internet. Only the OSDU API should be publicly accessible.
+
+### Options Considered
+
+1. **Basic auth on public endpoints**
+   - Simple password protection
+   - ❌ Still exposed to internet attacks
+   - ❌ Brute force risk, credential stuffing
+
+2. **OAuth2 Proxy**
+   - SSO for all services
+   - ❌ Complex setup
+   - ❌ Still publicly accessible login page
+
+3. **IP allowlisting**
+   - Whitelist specific IPs
+   - ❌ Dynamic IPs cause access issues
+   - ❌ Pain when traveling
+
+4. **WireGuard VPN** ✅
+   - Services only accessible via VPN
+   - ✅ Strong encryption
+   - ✅ Fast, kernel-level performance
+   - ✅ Works from anywhere
+   - ✅ Mobile support (iOS/Android)
+
+5. **Tailscale**
+   - Managed WireGuard
+   - ✅ Easier setup
+   - ❌ External dependency
+   - ❌ Free tier device limits
+
+### Decision
+
+Use WireGuard VPN for private network access. Public services (OSDU API) bind to public IP. Private services (admin UIs) bind to VPN IP only.
+
+### Network Design
+
+```
+Public (135.181.137.138):
+  └── osdu.domain.com (OSDU APIs)
+
+Private (10.10.0.1 via WireGuard):
+  ├── minio.domain.com
+  ├── console.domain.com
+  ├── kibana.domain.com
+  ├── grafana.domain.com
+  ├── argocd.domain.com
+  ├── kiali.domain.com
+  └── jaeger.domain.com
+```
+
+### Consequences
+
+- **Positive:** Zero attack surface for admin interfaces
+- **Positive:** No credential stuffing or brute force possible
+- **Positive:** Works from any location with VPN connection
+- **Positive:** Mobile access with WireGuard apps
+- **Negative:** Requires VPN client setup on each device
+- **Negative:** Additional key management for VPN peers
+
+---
+
+## ADR-007: Nginx IP Binding Strategy
+
+**Status:** Accepted  
+**Date:** 2026-02-17
+
+### Context
+
+With separate public and private networks, Nginx needs to listen on different interfaces for different services.
+
+### Options Considered
+
+1. **Listen on all interfaces (0.0.0.0)**
+   - `listen 443;`
+   - ❌ Private services accessible on public IP
+   - ❌ Relies solely on firewall for protection
+
+2. **Explicit IP binding** ✅
+   - `listen 135.181.137.138:443;` for public
+   - `listen 10.10.0.1:443;` for private
+   - ✅ Defense in depth
+   - ✅ Services unreachable even if firewall misconfigured
+
+### Decision
+
+Bind Nginx listeners to explicit IP addresses:
+- Public services: bind to `135.181.137.138:443`
+- Private services: bind to `10.10.0.1:443` (VPN interface)
+
+### Consequences
+
+- **Positive:** Strong network isolation at application layer
+- **Positive:** Defense in depth (complements firewall rules)
+- **Negative:** Must remember to use explicit IPs in config
+
+---
+
+## ADR-008: Private DNS Resolution
+
+**Status:** Proposed  
+**Date:** 2026-02-17
+
+### Context
+
+VPN clients need to resolve private service hostnames (e.g., `kibana.domain.com`) to the VPN server IP (`10.10.0.1`).
+
+### Options Considered
+
+1. **Client hosts file**
+   - Manual entries on each client
+   - ✅ Simple, no server config
+   - ❌ Must update each client for changes
+
+2. **dnsmasq on server** ✅
+   - Lightweight DNS server
+   - VPN clients use server as DNS
+   - ✅ Centralized management
+   - ✅ Automatic for all clients
+
+3. **Pi-hole on server**
+   - DNS + ad blocking
+   - ✅ Nice UI
+   - ❌ Heavier than needed
+
+### Decision
+
+Use dnsmasq on the server for private DNS resolution. VPN clients configure `DNS = 10.10.0.1` in WireGuard config.
+
+### Consequences
+
+- **Positive:** Add new services without touching clients
+- **Positive:** Consistent resolution for all VPN users
+- **Negative:** Extra service to maintain
+
+---
+
+## ADR-009: Observability Stack
 
 **Status:** Proposed  
 **Date:** 2026-02-17
@@ -234,20 +379,20 @@ Use the standard Prometheus/Grafana/ELK stack with Jaeger for tracing and Kiali 
 
 ## Pending Decisions
 
-### ADR-007: Authentication for Admin UIs
-- How to protect Kibana, Grafana, etc.?
-- Options: Basic auth, OAuth2 proxy, Keycloak
+### ADR-010: Authentication for OSDU APIs
+- OAuth2/OIDC provider
+- Options: Keycloak, Auth0, Azure AD mock
 
-### ADR-008: Backup Strategy
+### ADR-011: Backup Strategy
 - PostgreSQL backups
 - Elasticsearch snapshots
 - MinIO bucket replication
 
-### ADR-009: CI/CD Pipeline
+### ADR-012: CI/CD Pipeline
 - ArgoCD for GitOps?
 - How to update OSDU services?
 
-### ADR-010: Resource Limits and Quotas
+### ADR-013: Resource Limits and Quotas
 - Per-service limits
 - Namespace quotas
 - Priority classes
